@@ -1,0 +1,44 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=StrongPass123!
+      - POSTGRES_DB=sgfood
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./pg-init.sql:/docker-entrypoint-initdb.d/pg-init.sql
+
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sql_server_etl
+    environment:
+      SA_PASSWORD: "StrongPass123!"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+      - ./init-db.sql:/init-db.sql
+
+  init_sql:
+    image: mcr.microsoft.com/mssql-tools
+    depends_on:
+      - sqlserver
+    entrypoint: >
+      /bin/bash -c "
+        sleep 30;
+        /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P 'StrongPass123!' -i /init-db.sql
+      "
+    volumes:
+      - ./init-db.sql:/init-db.sql
+
+volumes:
+  sql_data:
+  pg_data:
+  
