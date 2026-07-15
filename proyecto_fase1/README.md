@@ -1,107 +1,103 @@
-# SG-Food - Proceso ETL
-Alberto Gabriel Reyes Ning \
-201612174 \
-Seminario de Sistemas 2 \
-Proyecto Fase 1
+# SG Food - ETL and Data Warehouse
 
-**SG-Food - Implementación de un proceso ETL para carga y análisis de ventas y compras**
+Project phase 1 implements an ETL process for SG Food sales and purchases data. The project loads flat files into staging environments, applies transformations in SSIS, and stores the results in a SQL Server data warehouse.
 
----
+## Scope
 
-## Descripción de las Fases del Proceso ETL
+- Built an SSIS project for sales and purchase ingestion.
+- Created SQL Server staging tables for file-based loading.
+- Created PostgreSQL staging tables for a hybrid ETL flow.
+- Designed the `DW_SGFood` star-schema warehouse in SQL Server.
+- Loaded customer, seller, product, branch, and supplier dimensions.
+- Loaded sales and purchase fact tables.
+- Documented SSIS data conversion rules for null handling, default values, type casting, and Boolean conversion.
+- Added Docker Compose support for local SQL Server and PostgreSQL services.
 
-El proyecto consta de tres fases para integrar archivos planos de ventas y compras (`.vent` y `.comp`) en un Data Warehouse centralizado:
+## Technology Used
 
-### 🔹 Fase 1: SQL Server (Staging → DW)
-- **Origen**: Archivos planos `SGFood01.vent` y `SGFood01.comp`.
-- **Destino**: Tablas staging en SQL Server.
-- **Transformaciones**:
-  - Se realizan en SSIS (validaciones, conversiones, lookups).
-  - Se insertan dimensiones (cliente, vendedor, producto, sucursal) si no existen.
-  - Se carga la información a las tablas de hechos (`fact_ventas`, `fact_compras`).
-  
-### 🔹 Fase 2: PostgreSQL → SQL Server (ETL Híbrido)
-- **Origen**: Archivos planos `SGFood02.vent` y `SGFood02.comp`.
-- **Destino temporal**: Tablas staging en PostgreSQL.
-- **Conexión**: Se utilizó un **ODBC Connection Manager** en SSIS (con el driver oficial de PostgreSQL).
-- **Transformaciones**:
-  - SSIS lee desde PostgreSQL vía ODBC.
-  - Mismo flujo de transformación que en Fase 1, resultados insertados en SQL Server DW.
+- SQL Server
+- SQL Server Integration Services (SSIS)
+- PostgreSQL
+- ODBC PostgreSQL driver
+- Docker Compose
+- T-SQL
+- Visual Studio 2022
 
-### 🔹 Fase 3: ETL Directo desde Archivos Planos
-- **Origen**: Archivos planos `SGFood03.vent` y `SGFood03.comp`.
-- **Sin staging**: SSIS extrae directamente desde los archivos planos.
-- **Transformaciones**:
-  - Se usa un componente `Multicast` para dividir los datos en flujos independientes.
-  - Cada flujo aplica limpieza, `Sort` y `Remove Duplicates`.
-  - Se hacen los `Lookups` a las dimensiones ya cargadas.
-  - Se insertan directamente en `fact_ventas` y `fact_compras`.
+## ETL Flows
 
+### Flow 1: SQL Server Staging to Data Warehouse
 
+- Source files: `SGFood01.vent` and `SGFood01.comp`.
+- Landing area: SQL Server staging tables.
+- Processing: SSIS validation, data conversion, sorting, deduplication, and lookup operations.
+- Destination: SQL Server warehouse tables in `DW_SGFood`.
 
-![imagen_etl](image.png)
+### Flow 2: PostgreSQL Staging to SQL Server Data Warehouse
 
----
+- Source files: `SGFood02.vent` and `SGFood02.comp`.
+- Landing area: PostgreSQL staging tables.
+- Connectivity: SSIS ODBC connection manager using the PostgreSQL driver.
+- Destination: same SQL Server warehouse model used by the first flow.
 
-## Modelo de Data Warehouse
+### Flow 3: Direct Flat File to Data Warehouse
 
-Se implementó un **modelo en estrella** en `DW_SGFood (SQL Server)` con las siguientes tablas:
+- Source files: `SGFood03.vent` and `SGFood03.comp`.
+- Landing area: no staging database.
+- Processing: direct SSIS extraction from flat files, multicast flows, cleanup, sorting, duplicate removal, dimension lookups, and fact table loads.
 
-### Dimensiones:
+## Data Warehouse Model
+
+The warehouse uses a star schema in `DW_SGFood`.
+
+### Dimensions
+
 - `dim_cliente`
 - `dim_vendedor`
 - `dim_producto`
 - `dim_sucursal`
 - `dim_proveedor`
 
-### Hechos:
-- `fact_ventas (id_fact_venta, fecha, id_cliente, id_vendedor, id_producto, id_sucursal, unidades, precio_unitario)`
-- `fact_compras (id_fact_compra, fecha, id_proveedor, id_producto, id_sucursal, unidades, costo_unitario)`
+### Facts
 
-![imagen_estrella](image2.png)
+- `fact_ventas`: sales transactions with units, unit price, and calculated `total_venta`.
+- `fact_compras`: purchase transactions with units, unit cost, and calculated `total_compra`.
 
-### Justificación:
-El modelo en estrella fue elegido por su simplicidad, velocidad en consultas analíticas y claridad en los procesos de transformación. Las claves surrogate (`id_`) permiten controlar la integridad referencial y aislar cambios en datos fuente.
+The model uses surrogate keys for warehouse relationships and keeps facts separated by business process: sales and purchases.
 
----
+## Important Files
 
-## Manual de Implementación
+| Path | Description |
+| --- | --- |
+| `fase1/fase1.sln` | Visual Studio SSIS solution. |
+| `fase1/Package.dtsx` | Main SSIS package. |
+| `init-db.sql` | Creates SQL Server staging and data warehouse structures. |
+| `pg-init.sql` | Creates PostgreSQL staging tables. |
+| `Data_conversion.md` | Field-level SSIS conversion and cleansing rules. |
+| `docker-compose.yml` | Local SQL Server and PostgreSQL environment. |
+| `*.vent`, `*.comp` | Sales and purchase input files for each ETL flow. |
 
-### Requisitos:
-- Visual Studio 2022 con SSIS instalado.
-- SQL Server (cualquier edición).
-- PostgreSQL (con tablas staging cargadas desde archivos planos).
-- Drivers:
-  - ODBC PostgreSQL Driver (`psqlodbc`).
+## How to Run
 
-### Pasos:
-1. **Clonar el repositorio**:
+1. Start the local database services:
+
    ```bash
-   git clone https://github.com/Agrn96/SS2_1S2025_201612174.git
-    ```
+   docker compose up -d
+   ```
 
-2. **Configurar instancias**:
+2. Open `fase1/fase1.sln` in Visual Studio 2022 with the SSIS extension installed.
 
-    - Crear la base de datos DW_SGFood con el script proporcionado.
+3. Update connection managers for:
 
-    - Crear tablas staging en SQL Server y PostgreSQL si se desea probar Fase 1 y 2 respectivamente.
+   - SQL Server OLE DB connection.
+   - PostgreSQL ODBC connection.
+   - Flat file paths for `.vent` and `.comp` files.
 
-3. **Editar las rutas de los archivos planos en los Flat File Connections.**
+4. Run the packages in the appropriate order for the selected flow:
 
-4. **Ajustar las conexiones en Connection Managers**:
+   - SQL Server staging flow.
+   - PostgreSQL staging flow.
+   - Direct flat file flow.
 
-    - SQL Server (OLE DB).
+5. Validate results by querying `DW_SGFood` dimensions and facts.
 
-    - PostgreSQL (ODBC DSN o connection string directa).
-
-5. **Ejecutar los paquetes en el orden**:
-
-    - Load_SQL_Server → Transform_and_Load_to_DIMS → Transform_and_Load_to_DW (para Fase 1).
-
-    - Load_Postgres → Transform_and_Load_to_DIMS_Postgres → Transform_and_Load_to_DW_Postgres (para Fase 2).
-
-    - Transform_and_Load_No_Staging (para Fase 3).
-
-6. **Verificar los datos**:
-
-    - Consultar las dimensiones y hechos para validar la carga.
+This phase covers warehouse design, multiple ETL loading strategies, SQL Server and PostgreSQL integration, and SSIS transformation logic.
